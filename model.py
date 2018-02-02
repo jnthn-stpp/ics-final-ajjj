@@ -69,6 +69,8 @@ class Env(object):
         # Add a population (one only) to the environment
         # "rows" specifies number of top rows in which to scatter agents
         # A list of positions can be given instead
+        if self.pop is not None:
+            print("Environment is already populated"); return
         if pop is None:
             pop = Pop()
         self.pop = pop
