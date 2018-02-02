@@ -1,4 +1,7 @@
 import random
+import math
+
+mutateChance = 0.01
 
 class Agent(object):
     def __init__(self, identity, gene=None):
@@ -27,6 +30,51 @@ class Pop(object):
         for i in range(n):
             self.agents.append(Agent(ids[i]))
         self.update()
+    def nextGen(self):
+        np = Pop(self.n)
+        np.n = (self.n//2)*2
+        np.agents= []
+
+        oldscores = [x.score for x in self.agents]
+        minscore = min(oldscores)
+        oldscores = [x+minscore+1 for x in oldscores]
+
+        scoresum = sum(oldscores)
+
+        for i in range(self.n//2):
+            li = int(math.ceil(random.random() * scoresum))
+            ri = int(math.ceil(random.random() * scoresum))
+
+            la = None 
+            ra = None 
+            for j in range(len(oldscores)):
+                li = li - oldscores[j]
+                if li <= 0:
+                    la = self.agents[j]        
+                    break;
+            for j in range(len(oldscores)):
+                ri = ri - oldscores[j]
+                if ri <= 0:
+                    ra = self.agents[j]        
+                    break;
+
+            cutsite = int(random.random() * 256)
+            lg = la.gene[0:cutsite] + ra.gene[cutsite:]
+            rg = ra.gene[0:cutsite] + la.gene[cutsite:]
+
+            mutate = random.random()
+            if(mutate <= mutateChance):
+                mutspot = int(random.random() * 256)
+                lg[mutspot] = random.choice("sfrl")
+            mutate = random.random()
+            if(mutate <= mutateChance):
+                mutspot = int(random.random() * 256)
+                rg[mutspot] = random.choice("sfrl")
+
+            np.agents.append(Agent(2*i, lg))
+            np.agents.append(Agent(2*i+1, rg))
+        return np
+
     def __str__(self):
         return str(self.agents)
     __repr__ = __str__
@@ -145,7 +193,7 @@ class Env(object):
                 if j is False: s = " "
                 elif j is True: s = "X"
                 elif j.i in identity: s = "@"
-                else: s = "-"
+                else: s = "0"
                 out += s
             out += "\n"
         print(out[:-1])
