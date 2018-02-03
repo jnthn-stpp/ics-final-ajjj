@@ -116,6 +116,8 @@ class Env(object):
         self.pop = pop
         if rows is None:
             rows = 2 * (n // self.width + 1)
+        if rows > self.length:
+            self.extend(rows - self.length)
         if pos is None:
             pos = random.sample(range(self.width * rows), pop.n)
             for i in range(pop.n):
@@ -173,6 +175,13 @@ class Env(object):
         if blocking:
             self.block(density, self.length, self.length + rows)
         self.length += rows
+    def trim(self, margin=0):
+        for r in range(self.length + 1, 1, -1):
+            for c in range(2, self.width + 2):
+                if type(self.grid[r][c]) is Agent:
+                    self.grid = self.grid[:r + 3 + margin]
+                    self.grid += 2 * [(self.width + 4) * [True]]
+                    self.length = r + 1 + margin; return
     def find(self, identity):
         # Get agent's row and column by ID
         for r in range(2, self.length + 2):
@@ -215,7 +224,7 @@ class Env(object):
                     if type(cell) is Agent:
                         neighbor = self.neighborhood(r=r, c=c)
                         cell.move = cell.gene[neighbor]
-    def step(self, n=1, inf=True, blocking=False, density=0.05, points=(1, 0, -5, -10)):
+    def step(self, n=1, blocking=False, density=0.05, points=(1, 0, -5, -10)):
         for i in range(n):
             distance = None
             self.setmoves()
@@ -252,17 +261,18 @@ class Env(object):
                                 cell.move = "n"
                         elif cell.move is "s":
                             cell.score += points[1]
-            if inf and distance > self.length - 2:
+            if distance > self.length - 2:
                 self.extend(self.width, blocking, density)
         self.pop.update()
 
-def run(env, pop, n=1, s=100, mr=0.01, out=[], mutationprobabilities=None):
+def run(env, pop, n=1, s=100, mr=0.01, out=[], blocking=False, density=0.05):
     env.depopulate()
     pop.reset()
-    mutationprobabilities.append((1 - mr) ** 256)
+    mutationprobabilities = [(1 - mr) ** 256]
     for i in range(n):
         env.populate(pop=pop)
-        env.step(s)
+        env.trim()
+        env.step(s, blocking, density)
         out.append(pop.fitness)
         pop = pop.generate(mr, mp=mutationprobabilities)
         env.depopulate()
