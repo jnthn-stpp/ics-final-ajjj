@@ -1,6 +1,7 @@
 import random
 
 class Agent(object):
+	'''Agent(identity, gene)'''
     score = 0
     move = None
     def __init__(self, identity, gene=None):
@@ -17,6 +18,7 @@ class Agent(object):
     # By default, prints agent ID as representation
 
 class Pop(object):
+	'''Pop(n=0, ids)'''
     scores = None
     fitness = None
     # List of agent scores in order of self.agents
@@ -43,6 +45,7 @@ class Pop(object):
             i.score = 0
         self.update()
     def grow(self, n=50, ids=None):
+		'''grow(n=50, ids)'''
         if ids is None:
             m = max([(a.i if type(a.i) is int else 0) for a in self.agents]) + 1
             ids = [i for i in range(m, m + n)]
@@ -50,6 +53,7 @@ class Pop(object):
             self.agents.append(Agent(ids[i]))
         self.update()
     def generate(self, mr=0, pairs=None, mp=None):
+		'''generate(mr=0, pairs, mp)'''
         if pairs is None:
             pairs = self.n // 2
         np = Pop()
@@ -86,6 +90,7 @@ class Pop(object):
         return np
 
 class Env(object):
+	'''Env(width=30, length=30)'''
     # self contains a padded grid whose dimensions
     # (without padding) are self.length and self.width
     length = 0
@@ -106,6 +111,7 @@ class Env(object):
         return out[:-1]
     __repr__ = __str__
     def populate(self, n=50, pop=None, rows=None, pos=None):
+		'''populate(n=50, pop, [rows | pos])'''
         # Add a population (one only) to the environment
         # "rows" specifies number of top rows in which to scatter agents
         # A list of positions can be given instead
@@ -136,6 +142,7 @@ class Env(object):
         self.clear("agents")
         self.pop = None
     def block(self, density=0.05, rmin=10, rmax=None, blks=None):
+		'''block([density=0.05, rmin=10, rmax | blks])'''
         # Add obstacles; similar functionality to self.populate
         if blks is None:
             if rmax is None:
@@ -151,6 +158,7 @@ class Env(object):
                 r, c = i
                 self.grid[r][c] = self.grid[r][c] or True
     def clear(self, w="all"):
+		'''clear("all" | "ag[ent[s]]" | "b[lock[s]]")'''
         # Clear obstacles ("blocks"), agents, or both from self.grid
         # Clearing agents does not remove them from their populations
         for r in range(2, self.length + 2):
@@ -166,6 +174,7 @@ class Env(object):
                 else:
                     print("Wrong argument"); return
     def extend(self, rows=1, blocking=False, density=0.05):
+		'''extend(rows=1, blocking=False, density=0.05)'''
         # Appends rows to self.grid
         # blocking=True creates obstacles in the new rows
         self.grid = self.grid[:-2]
@@ -176,6 +185,7 @@ class Env(object):
             self.block(density, self.length, self.length + rows)
         self.length += rows
     def trim(self, margin=0):
+		'''trim(margin=0)'''
         for r in range(self.length + 1, 1, -1):
             for c in range(2, self.width + 2):
                 if type(self.grid[r][c]) is Agent:
@@ -183,6 +193,7 @@ class Env(object):
                     self.grid += 2 * [(self.width + 4) * [True]]
                     self.length = r + 1 + margin; return
     def find(self, identity):
+		'''find(identity)'''
         # Get agent's row and column by ID
         for r in range(2, self.length + 2):
             for c in range(2, self.width + 2):
@@ -191,6 +202,7 @@ class Env(object):
                         return (r, c)
         print("Agent not found")
     def show(self, *identity):
+		'''show(*identity)'''
         # Display agent by ID
         out = ""
         for i in self.grid:
@@ -203,12 +215,14 @@ class Env(object):
             out += "\n"
         print(out[:-1])
     def remove(self, *identity):
+		'''remove(*identity)'''
         # Remove agent by ID
         # Does not remove agent from its population
         for i in identity:
             r, c = self.find(i)
             self.grid[r][c] = False
     def neighborhood(self, identity=None, r=None, c=None):
+		'''neighborhood(identity | r, c)'''
         if identity is not None:
             r, c = self.find(identity)
         neighbor = 0
@@ -225,6 +239,7 @@ class Env(object):
                         neighbor = self.neighborhood(r=r, c=c)
                         cell.move = cell.gene[neighbor]
     def step(self, n=1, blocking=False, density=0.05, points=(1, 0, -5, -10)):
+		'''step(n=1, blocking=False, density=0.05, points=(1, 0, -5, -10))'''
         for i in range(n):
             distance = None
             self.setmoves()
@@ -266,6 +281,7 @@ class Env(object):
         self.pop.update()
 
 def run(env, pop, n=1, s=100, mr=0.01, out=[], blocking=False, density=0.05):
+	'''run(env, pop, n=1, s=100, mr=0.01, out=[], blocking=False, density=0.05)'''
     env.depopulate()
     pop.reset()
     mutationprobabilities = [(1 - mr) ** 256]
