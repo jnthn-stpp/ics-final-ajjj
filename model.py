@@ -1,9 +1,8 @@
 import random
-import math
-
-mutateChance = 0.01
 
 class Agent(object):
+    score = 0
+    move = None
     def __init__(self, identity, gene=None):
         self.i = identity
         # Identification number, string, etc.
@@ -12,7 +11,6 @@ class Agent(object):
             for i in range(256):
                 gene += random.choice("sfrl")
         self.gene = gene
-        self.score = 0
     def __str__(self):
         return str(self.i)
     __repr__ = __str__
@@ -20,8 +18,9 @@ class Agent(object):
 
 class Pop(object):
     scores = None
+    fitness = None
     # List of agent scores in order of self.agents
-    def __init__(self, n=50, ids=None):
+    def __init__(self, n=0, ids=None):
         # A list of IDs can be used to name agents
         self.n = n
         if ids is None:
@@ -30,68 +29,61 @@ class Pop(object):
         for i in range(n):
             self.agents.append(Agent(ids[i]))
         self.update()
-    def nextGen(self):
-        np = Pop(self.n)
-        np.n = (self.n//2)*2
-        np.agents= []
-
-        oldscores = [x.score for x in self.agents]
-        minscore = min(oldscores)
-        oldscores = [x+minscore+1 for x in oldscores]
-
-        scoresum = sum(oldscores)
-
-        for i in range(self.n//2):
-            li = int(math.ceil(random.random() * scoresum))
-            ri = int(math.ceil(random.random() * scoresum))
-
-            la = None 
-            ra = None 
-            for j in range(len(oldscores)):
-                li = li - oldscores[j]
-                if li <= 0:
-                    la = self.agents[j]        
-                    break;
-            for j in range(len(oldscores)):
-                ri = ri - oldscores[j]
-                if ri <= 0:
-                    ra = self.agents[j]        
-                    break;
-
-            cutsite = int(random.random() * 256)
-            lg = la.gene[0:cutsite] + ra.gene[cutsite:]
-            rg = ra.gene[0:cutsite] + la.gene[cutsite:]
-
-            mutate = random.random()
-            if(mutate <= mutateChance):
-                mutspot = int(random.random() * 256)
-                lg[mutspot] = random.choice("sfrl")
-            mutate = random.random()
-            if(mutate <= mutateChance):
-                mutspot = int(random.random() * 256)
-                rg[mutspot] = random.choice("sfrl")
-
-            np.agents.append(Agent(2*i, lg))
-            np.agents.append(Agent(2*i+1, rg))
-        return np
-
     def __str__(self):
         return str(self.agents)
     __repr__ = __str__
     def update(self):
         # Called after calling environment.step to update scores, etc.
+        self.n = len(self.agents)
         self.scores = [a.score for a in self.agents]
+        if self.n > 0:
+            self.fitness = sum(self.scores) / self.n
+    def reset(self):
+        for i in self.agents:
+            i.score = 0
+        self.update()
     def grow(self, n=50, ids=None):
-        self.n += n
         if ids is None:
             m = max([(a.i if type(a.i) is int else 0) for a in self.agents]) + 1
             ids = [i for i in range(m, m + n)]
         for i in range(n):
             self.agents.append(Agent(ids[i]))
         self.update()
-    def generate(self):
-        # This will generate a new population based on score selection
-        pass
+    def generate(self, mr=0, pairs=None, mp=None):
+        if pairs is None:
+            pairs = self.n // 2
+        np = Pop()
+        np.n = 2 * pairs
+        self.update()
+        minscore = min(self.scores)
+        oldscores = [x - minscore + 1 for x in self.scores]
+        scoresum = sum(oldscores)
+        for i in range(pairs):
+            li = random.randrange(scoresum) + 1
+            ri = random.randrange(scoresum) + 1
+            la = None
+            ra = None
+            for j in range(self.n):
+                li -= oldscores[j]
+                if li <= 0:
+                    la = self.agents[j]; break
+            for j in range(self.n):
+                ri -= oldscores[j]
+                if ri <= 0:
+                    ra = self.agents[j]; break
+            cutsite = random.randrange(256)
+            lg = la.gene[:cutsite] + ra.gene[cutsite:]
+            rg = ra.gene[:cutsite] + la.gene[cutsite:]
+            if mp is None:
+                mp = [(1 - mr) ** 256]
+            for j in mutationsites(mr, mp):
+                lg = lg[:j] + random.choice("sfrl") + lg[j + 1:]
+            for j in mutationsites(mr, mp):
+                rg = rg[:j] + random.choice("sfrl") + rg[j + 1:]
+            np.agents.append(Agent(2 * i, lg))
+            np.agents.append(Agent(2 * i + 1, rg))
+            np.update()
+        return np
 
 class Env(object):
     # self contains a padded grid whose dimensions
@@ -113,15 +105,19 @@ class Env(object):
             out += "\n"
         return out[:-1]
     __repr__ = __str__
-    def populate(self, pop=None, rows=5, pos=None):
+    def populate(self, n=50, pop=None, rows=None, pos=None):
         # Add a population (one only) to the environment
         # "rows" specifies number of top rows in which to scatter agents
         # A list of positions can be given instead
         if self.pop is not None:
             print("Environment is already populated"); return
         if pop is None:
-            pop = Pop()
+            pop = Pop(n)
         self.pop = pop
+        if rows is None:
+            rows = 2 * (n // self.width + 1)
+        if rows > self.length:
+            self.extend(rows - self.length)
         if pos is None:
             pos = random.sample(range(self.width * rows), pop.n)
             for i in range(pop.n):
@@ -179,6 +175,13 @@ class Env(object):
         if blocking:
             self.block(density, self.length, self.length + rows)
         self.length += rows
+    def trim(self, margin=0):
+        for r in range(self.length + 1, 1, -1):
+            for c in range(2, self.width + 2):
+                if type(self.grid[r][c]) is Agent:
+                    self.grid = self.grid[:r + 3 + margin]
+                    self.grid += 2 * [(self.width + 4) * [True]]
+                    self.length = r + 1 + margin; return
     def find(self, identity):
         # Get agent's row and column by ID
         for r in range(2, self.length + 2):
@@ -195,7 +198,7 @@ class Env(object):
                 if j is False: s = " "
                 elif j is True: s = "X"
                 elif j.i in identity: s = "@"
-                else: s = "0"
+                else: s = "-"
                 out += s
             out += "\n"
         print(out[:-1])
@@ -205,8 +208,7 @@ class Env(object):
         for i in identity:
             r, c = self.find(i)
             self.grid[r][c] = False
-    def neighborhood(self, identity=None, r=None, c=None, index=False):
-        # Use index=True to get the numerical value from 0 to 255
+    def neighborhood(self, identity=None, r=None, c=None):
         if identity is not None:
             r, c = self.find(identity)
         neighbor = 0
@@ -214,39 +216,77 @@ class Env(object):
                   (1, -1), (1, 0), (1, 1), (2, 0)):
             neighbor <<= 1
             neighbor += bool(self.grid[r + i[0]][c + i[1]])
-        return neighbor if index else self.grid[r][c].gene[neighbor]
-    def step(self, n=1, inf=True, blocking=False, density=0.05):
-        # Moves all the agents, reading rows from left to right up the grid
-        # Automatically extends the grid when agents get close to the bottom
-        # "skip" is used to avoid moving an agent again after it has moved right
-        # Adds a point for successful forward movement
-        # Subtracts a point in all other cases
+        return neighbor
+    def setmoves(self):
+        for r in range(2, self.length + 2):
+                for c in range(2, self.width + 2):
+                    cell = self.grid[r][c]
+                    if type(cell) is Agent:
+                        neighbor = self.neighborhood(r=r, c=c)
+                        cell.move = cell.gene[neighbor]
+    def step(self, n=1, blocking=False, density=0.05, points=(1, 0, -5, -10)):
         for i in range(n):
             distance = None
-            skip = False
+            self.setmoves()
             for r in range(self.length + 1, 1, -1):
-                for c in range(2, self.width + 2):
-                    if skip:
-                        skip = False
-                    elif type(self.grid[r][c]) is Agent:
+                for c in random.sample(range(2, self.width + 2), self.width):
+                    cell = self.grid[r][c]
+                    if type(cell) is Agent:
                         if distance is None:
-                            distance = r - 2
-                        move = self.neighborhood(r=r, c=c)
-                        if move is "f" and not self.grid[r + 1][c]:
-                            self.grid[r + 1][c] = self.grid[r][c]
-                            self.grid[r][c] = False
-                            self.grid[r + 1][c].score += 1
-                        elif move is "r" and not self.grid[r][c + 1]:
-                            self.grid[r][c + 1] = self.grid[r][c]
-                            self.grid[r][c] = False
-                            self.grid[r][c + 1].score -= 1
-                            skip = True
-                        elif move is "l" and not self.grid[r][c - 1]:
-                            self.grid[r][c - 1] = self.grid[r][c]
-                            self.grid[r][c] = False
-                            self.grid[r][c - 1].score -= 1
-                        else:
-                            self.grid[r][c].score -= 1
-            if inf and distance > self.length - 4:
+                            distance = r
+                        if cell.move is "f":
+                            space = self.grid[r + 1][c]
+                            if space:
+                                if type(space) is Agent and space.move is "n":
+                                    cell.score += points[2]
+                                else:
+                                    cell.score += points[3]
+                            else:
+                                self.grid[r + 1][c] = cell
+                                self.grid[r][c] = False
+                                cell.score += points[0]
+                        elif cell.move in "rl":
+                            offset = 1 if cell.move is "r" else -1
+                            space = self.grid[r][c + offset]
+                            if space:
+                                if type(space) is Agent and space.move is "n":
+                                    cell.score += points[2]
+                                    space.score += points[2]
+                                else:
+                                    cell.score += points[3]
+                            else:
+                                self.grid[r][c + offset] = cell
+                                self.grid[r][c] = False
+                                cell.score += points[1]
+                                cell.move = "n"
+                        elif cell.move is "s":
+                            cell.score += points[1]
+            if distance > self.length - 2:
                 self.extend(self.width, blocking, density)
         self.pop.update()
+
+def run(env, pop, n=1, s=100, mr=0.01, out=[], blocking=False, density=0.05):
+    env.depopulate()
+    pop.reset()
+    mutationprobabilities = [(1 - mr) ** 256]
+    for i in range(n):
+        env.populate(pop=pop)
+        env.trim()
+        env.step(s, blocking, density)
+        out.append(pop.fitness)
+        pop = pop.generate(mr, mp=mutationprobabilities)
+        env.depopulate()
+    return pop
+
+def mutationsites(mr, mp):
+    n = random.random()
+    for i in range(len(mp)):
+        n -= mp[i]
+        if n <= 0:
+            return random.sample(range(256), i)
+    for i in range(len(mp) - 1, 257):
+        if n <= 0:
+            return random.sample(range(256), i)
+        mp.append(mp[i] * (mr * (256 - i)) / ((1 - mr) * (i + 1)))
+        n -= mp[i + 1]
+    return range(256)
