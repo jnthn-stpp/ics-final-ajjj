@@ -56,7 +56,7 @@ class Pop(object):
         np.n = 2 * pairs
         self.update()
         minscore = min(self.scores)
-        oldscores = [x - minscore + 1 for x in self.scores]
+        oldscores = [(x - minscore + 1) ** 2 for x in self.scores]
         scoresum = sum(oldscores)
         for i in range(pairs):
             li = random.randrange(scoresum) + 1
